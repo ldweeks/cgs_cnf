@@ -1,0 +1,5 @@
+name = CGS
+description = Creates section banner and promotional blocks to be displayed in the context of a group.
+package = Church of the Good Shepherd
+core = 6.x
+version = "6.x-dev"

@@ -1,0 +1,153 @@
+<?php
+/**
+ * @file
+ * This module exists to display blocks at the right place.
+ *
+ * It does stuff.
+ */
+
+/** 
+* Implementation of hook_block().
+*/
+
+function cgs_block($op = 'list', $delta = 0, $edit = array()) { 
+	switch ($op) {
+		// $op = 'list' when you are viewing the blogs on the admin blocks page.
+		case 'list':
+			$blocks[0]['info'] = t('CGS Section Banners'); 
+			$blocks[0]['cache'] = BLOCK_NO_CACHE;
+			$blocks[1]['info'] = t('CGS Promotional Boxes');
+			$blocks[1]['cache'] = BLOCK_NO_CACHE;
+			return $blocks;
+		
+		// $op = 'view' when the block is actually viewed on the website by a user.
+		case 'view':
+			$path = drupal_get_path_alias($_GET['q']);
+			$count = 0;
+			
+      if ($delta == 0) {	//Section Banner Block
+        
+        $sec_banner_list = array();
+        
+        $results = db_query("
+          SELECT 
+            content_type_section_banner.field_banner_visibility_value, 
+            content_type_section_banner.field_sec_banner_image_fid, 
+            files.filepath
+          FROM 
+            content_type_section_banner
+          LEFT JOIN files ON content_type_section_banner.field_sec_banner_image_fid = files.fid
+        ");
+        
+        while ($banner = db_fetch_object($results)) {
+				  // Match path if necessary
+					if ($banner->field_banner_visibility_value) {
+					
+							// Compare with the internal and path alias (if any).
+							$page_match = drupal_match_path($path, $banner->field_banner_visibility_value);
+							
+							if ($path != $_GET['q']) {
+								$page_match = $page_match || drupal_match_path($_GET['q'], $banner->field_banner_visibility_value);
+							}
+					}
+					else {
+						$page_match = TRUE;
+					}
+					
+					if($page_match) {
+					  
+					  $block['content'] = theme('image', $banner->filepath);
+            break;
+          }
+        }
+
+				$block['subject'] = t('<none>');
+			}
+			elseif ($delta == 1) {	//Promotional Items Block
+			  
+			  $promo_box_list = array();
+			  $promo_box_body = "";
+			  $all_promo_items = "";
+			  
+				$results = db_query("
+				  SELECT
+				    r.nid,
+            r.title,
+            r.field_promo_image_fid,
+            r.field_visibility_value,
+            r.field_short_description_value,
+            r.field_link_url,
+            r.field_weight_value,
+            files.fid,
+            files.filepath
+          FROM
+          (SELECT
+            s.nid, 
+            s.mvid,
+            s.title,
+            content_type_promo_box.field_promo_image_fid, 
+            content_type_promo_box.field_visibility_value, 
+            content_type_promo_box.field_short_description_value, 
+            content_type_promo_box.field_link_url, 
+            content_type_promo_box.field_weight_value 
+            FROM 
+              (SELECT title, nid, MAX(vid) AS mvid FROM {node} WHERE type = 'promo_box' GROUP BY nid) s 
+            LEFT JOIN 
+              {content_type_promo_box} ON content_type_promo_box.nid = s.nid AND content_type_promo_box.vid = s.mvid) r
+          LEFT JOIN 
+            {files} ON files.fid = r.field_promo_image_fid ORDER BY r.field_weight_value ASC
+          ");
+          
+				while ($promo_box = db_fetch_object($results)) {
+				  // Match path if necessary
+					if ($promo_box->field_visibility_value) {
+					
+							// Compare with the internal and path alias (if any).
+							$page_match = drupal_match_path($path, $promo_box->field_visibility_value);
+							
+							if ($path != $_GET['q']) {
+								$page_match = $page_match || drupal_match_path($_GET['q'], $promo_box->field_visibility_value);
+							}
+							// When $block->visibility has a value of 0, the block is displayed on
+							// all pages except those listed in $block->pages. When set to 1, it
+							// is displayed only on those pages listed in $block->pages.
+							// $page_match = !($block->visibility xor $page_match);
+					}
+					else {
+						$page_match = TRUE;
+					}
+					
+					if($page_match) {
+					  
+					  $promo_box_list[$count] = t('<h5><a href="' . $promo_box->field_link_url . '">' . $promo_box->title . '</a></h5>');
+					  
+					  if ($promo_box->filepath OR $promo_box->field_short_description_value) {
+					    $promo_box_list[$count] .= t('<div class="pbItemBody">');
+					    
+              if ($promo_box->filepath) {
+                //theme('imagecache', 'preset_namespace', $image_filepath, $alt, $title, $attributes)
+                $promo_box_list[$count] .= theme('imagecache', 'Thumbnail', $promo_box->filepath);
+              }
+              if ($promo_box->field_short_description_value) {
+                $promo_box_list[$count] .= t('<div class="pbDescription">' . $promo_box->field_short_description_value . '</div>');
+              }
+              
+              $promo_box_list[$count] = $promo_box_list[$count] . t('</div>');
+					  }
+					  
+					  $promo_box_list[$count] = t('<div class="pbItem">' . $promo_box_list[$count] . '</div>');
+					  // pbItemBody
+					  
+					  $all_promo_items .= $promo_box_list[$count];
+					  
+					  $count++;
+					}
+				}
+				
+				$block['subject'] = t('<none>'); 
+				// We theme our array of links as an unordered list. 
+				$block['content'] = $all_promo_items;
+			}
+			return $block;
+	}
+}
